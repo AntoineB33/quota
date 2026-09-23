@@ -6,11 +6,6 @@ CONFIG = {
     'START_HOUR': 10,
     'START_MINUTE': 7,
     'START_SECOND': 0,
-    
-    'END_WEEKDAY': 1,
-    'END_HOUR': 10,
-    'END_MINUTE': 7,
-    'END_SECOND': 0,
 }
 
 if __name__ == "__main__":

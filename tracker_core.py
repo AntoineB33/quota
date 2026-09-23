@@ -9,25 +9,29 @@ DEFAULT_CONFIG = {
     'START_MINUTE': 0,
     'START_SECOND': 0,
     
-    'END_WEEKDAY': 6,    # 6 = Sunday
-    'END_HOUR': 23,
-    'END_MINUTE': 59,
-    'END_SECOND': 59,
-
     # Sleep schedule defaults
     'SLEEP_START': '22:15',
-    'SLEEP_END': '08:20'
+    'SLEEP_END': '08:20',
+
+    # Number of times the quota resets during the tracked period (must be >= 1)
+    'QUOTA_CYCLES': 1
 }
 
 def calculate_period_progression(
     start_weekday, start_hour, start_minute=0, start_second=0,
-    end_weekday=None, end_hour=None, end_minute=0, end_second=0,
-    reference_time=None
+    end_weekday=None, end_hour=None, end_minute=None, end_second=None,
+    reference_time=None, quota_cycles=1
 ):
     """
     Calculates the time progression percentage between a specific start 
-    and end time within a weekly cycle.
+    and end time within a weekly cycle, accounting for multiple quotas per period.
     """
+    # Apply default values for end time if not explicitly provided
+    if end_weekday is None: end_weekday = start_weekday
+    if end_hour is None: end_hour = start_hour
+    if end_minute is None: end_minute = start_minute
+    if end_second is None: end_second = start_second
+
     now = reference_time if reference_time else datetime.datetime.now().astimezone()
 
     # 1. Find the most recent start time
@@ -44,9 +48,6 @@ def calculate_period_progression(
         start_time -= datetime.timedelta(days=7)
 
     # 2. Find the corresponding end time
-    if end_hour is None or end_weekday is None:
-        raise ValueError("end_weekday and end_hour must be provided")
-
     end_time = start_time.replace(
         hour=end_hour,
         minute=end_minute,
@@ -57,6 +58,7 @@ def calculate_period_progression(
     days_to_end = (end_weekday - start_weekday) % 7
     end_time += datetime.timedelta(days=days_to_end)
 
+    # If start and end are exactly the same, it creates a full 7-day period
     if end_time <= start_time:
         end_time += datetime.timedelta(days=7)
 
@@ -64,12 +66,15 @@ def calculate_period_progression(
     total_duration = (end_time - start_time).total_seconds()
     elapsed_time = (now - start_time).total_seconds()
 
-    # 4. Calculate percentage and check if we are outside the active period
+    # 4. Calculate percentage based on the number of quota cycles
     if elapsed_time >= total_duration:
         percentage = 100.0
         is_active = False
     else:
-        percentage = (elapsed_time / total_duration) * 100
+        # Divide the period into sub-cycles based on QUOTA_CYCLES
+        cycle_duration = total_duration / max(1, quota_cycles)
+        elapsed_in_current_cycle = elapsed_time % cycle_duration
+        percentage = (elapsed_in_current_cycle / cycle_duration) * 100
         is_active = True
 
     return percentage, start_time, end_time, is_active
@@ -83,6 +88,13 @@ def run_tracker(name, custom_config=None):
     config = DEFAULT_CONFIG.copy()
     if custom_config:
         config.update(custom_config)
+
+    # Fallback missing END constants to START constants
+    for suffix in ['WEEKDAY', 'HOUR', 'MINUTE', 'SECOND']:
+        end_key = f'END_{suffix}'
+        start_key = f'START_{suffix}'
+        if end_key not in config:
+            config[end_key] = config[start_key]
 
     times_to_evaluate = None
 
@@ -99,7 +111,7 @@ def run_tracker(name, custom_config=None):
             progression_pct, start, end, is_active = calculate_period_progression(
                 config['START_WEEKDAY'], config['START_HOUR'], config['START_MINUTE'], config['START_SECOND'],
                 config['END_WEEKDAY'], config['END_HOUR'], config['END_MINUTE'], config['END_SECOND'],
-                eval_time
+                eval_time, config.get('QUOTA_CYCLES', 1)
             )
             
             label = "Current Time" if eval_time == current_batch[0] and times_to_evaluate is None else "Evaluated Time"
@@ -109,7 +121,7 @@ def run_tracker(name, custom_config=None):
             print("=" * 55)
             print(f"Cycle Start : {start.strftime('%A, %Y-%m-%d %H:%M:%S')}")
             print(f"Cycle End   : {end.strftime('%A, %Y-%m-%d %H:%M:%S')}")
-            print(f"Sleep Time  : {config['SLEEP_START']} to {config['SLEEP_END']}")
+            print(f"Sleep Time  : {config.get('SLEEP_START', 'N/A')} to {config.get('SLEEP_END', 'N/A')}")
             print(f"{label.ljust(12)}: {eval_time.strftime('%A, %Y-%m-%d %H:%M:%S')}")
             print("-" * 55)
             print(f"Progression : {progression_pct:.4f}% ({status})")
