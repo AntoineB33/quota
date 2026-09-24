@@ -11,7 +11,7 @@ DEFAULT_CONFIG = {
     
     # Sleep schedule defaults
     'SLEEP_START': '22:15',
-    'SLEEP_END': '08:20',
+    'SLEEP_END': '10:00',
 
     # Number of times the quota resets during the tracked period (must be >= 1)
     'QUOTA_CYCLES': 1
@@ -194,7 +194,7 @@ def run_tracker(name, custom_config=None):
             print(f"Sleep Time  : {config.get('SLEEP_START', 'N/A')} to {config.get('SLEEP_END', 'N/A')}")
             print(f"{label.ljust(16)}: {eval_time.strftime('%A, %Y-%m-%d %H:%M:%S')}")
             print("-" * 55)
-            print(f"Progression : {progression_pct:.4f}% ({status})")
+            print(f"Progression : {progression_pct:.0f}% ({status})")
             print("=" * 55)
 
         print("\nOptions:")
